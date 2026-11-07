@@ -1,0 +1,360 @@
+--[[
+    Multi Target Auto Attack + Mobile UI
+    Range / Damage ปรับได้ · เปิด-ปิด · ลากได้
+    มอนตายจริง (TakeDamage + Force Kill)
+]]
+
+repeat task.wait() until game:IsLoaded()
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local LP = Players.LocalPlayer
+repeat task.wait() until LP
+local PlayerGui = LP:WaitForChild("PlayerGui")
+
+-------------------------------------------------
+-- CONFIG
+-------------------------------------------------
+local Settings = {
+    Enabled = false,
+    Range = 150,
+    Damage = 3000,
+    Delay = 0.08,
+    MaxTargets = 40,
+}
+
+-------------------------------------------------
+-- ATTACK
+-------------------------------------------------
+local function getRoot(character)
+    return character and character:FindFirstChild("HumanoidRootPart")
+end
+
+local function ForceKill(humanoid, mob)
+    if not humanoid then return end
+    pcall(function()
+        humanoid.Health = 0
+        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+        humanoid:TakeDamage(math.huge)
+    end)
+    -- บางเกมต้องทำลายตัวเพื่อให้ despawn
+    pcall(function()
+        if mob and mob.Parent and humanoid.Health <= 0 then
+            for _, p in ipairs(mob:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function AttackOnce()
+    local character = LP.Character
+    local playerRoot = getRoot(character)
+    if not playerRoot then return end
+
+    local enemies = workspace:FindFirstChild("Enemies")
+    if not enemies then return end
+
+    local pos = playerRoot.Position
+    local range = Settings.Range
+    local dmg = Settings.Damage
+    local hit = 0
+
+    for _, enemy in ipairs(enemies:GetChildren()) do
+        if hit >= Settings.MaxTargets then break end
+        if enemy:IsA("Model") then
+            local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+            local enemyRoot = enemy:FindFirstChild("HumanoidRootPart")
+
+            if humanoid and enemyRoot and humanoid.Health > 0 then
+                local dist = (enemyRoot.Position - pos).Magnitude
+                if dist <= range then
+                    pcall(function()
+                        humanoid:TakeDamage(dmg)
+                    end)
+                    -- เลือดเหลือน้อยกว่าดาเมจ / ใกล้ 0 → บังคับตาย 100%
+                    if humanoid.Health <= dmg or humanoid.Health <= humanoid.MaxHealth * 0.05 then
+                        ForceKill(humanoid, enemy)
+                    end
+                    hit = hit + 1
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while true do
+        if Settings.Enabled then
+            pcall(AttackOnce)
+            task.wait(Settings.Delay)
+        else
+            task.wait(0.2)
+        end
+    end
+end)
+
+-------------------------------------------------
+-- UI (เล็ก · มือถือ · ลากได้)
+-------------------------------------------------
+local function ClearOld()
+    local old = PlayerGui:FindFirstChild("MultiHitUI")
+    if old then old:Destroy() end
+    pcall(function()
+        local cg = game:GetService("CoreGui")
+        local o = cg:FindFirstChild("MultiHitUI")
+        if o then o:Destroy() end
+    end)
+end
+ClearOld()
+
+local parent = PlayerGui
+pcall(function()
+    if gethui then parent = gethui() end
+end)
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MultiHitUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 50
+ScreenGui.Parent = parent
+
+-- โลโก้เปิด/ปิด (ลากได้)
+local Logo = Instance.new("TextButton")
+Logo.Name = "Logo"
+Logo.Size = UDim2.fromOffset(44, 44)
+Logo.Position = UDim2.new(0, 12, 0.35, 0)
+Logo.BackgroundColor3 = Color3.fromRGB(22, 28, 42)
+Logo.Text = "ATK"
+Logo.Font = Enum.Font.GothamBold
+Logo.TextSize = 12
+Logo.TextColor3 = Color3.fromRGB(100, 190, 255)
+Logo.AutoButtonColor = true
+Logo.Parent = ScreenGui
+Instance.new("UICorner", Logo).CornerRadius = UDim.new(1, 0)
+local logoStroke = Instance.new("UIStroke")
+logoStroke.Color = Color3.fromRGB(60, 140, 255)
+logoStroke.Thickness = 1.5
+logoStroke.Parent = Logo
+
+-- หน้าต่างหลัก (เล็ก)
+local Panel = Instance.new("Frame")
+Panel.Name = "Panel"
+Panel.Size = UDim2.fromOffset(210, 250)
+Panel.Position = UDim2.new(0, 12, 0.35, 52)
+Panel.BackgroundColor3 = Color3.fromRGB(16, 20, 32)
+Panel.BorderSizePixel = 0
+Panel.Visible = true
+Panel.Parent = ScreenGui
+Instance.new("UICorner", Panel).CornerRadius = UDim.new(0, 12)
+local panelStroke = Instance.new("UIStroke")
+panelStroke.Color = Color3.fromRGB(50, 110, 200)
+panelStroke.Thickness = 1.2
+panelStroke.Parent = Panel
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 0, 28)
+Title.Position = UDim2.fromOffset(10, 6)
+Title.BackgroundTransparency = 1
+Title.Text = "Multi Hit"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 14
+Title.TextColor3 = Color3.fromRGB(120, 190, 255)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Panel
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.fromOffset(26, 26)
+CloseBtn.Position = UDim2.new(1, -32, 0, 6)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(40, 48, 64)
+CloseBtn.Text = "—"
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 14
+CloseBtn.TextColor3 = Color3.new(1, 1, 1)
+CloseBtn.Parent = Panel
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+
+local function makeLabel(y, text)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, -16, 0, 16)
+    l.Position = UDim2.fromOffset(8, y)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.Font = Enum.Font.Gotham
+    l.TextSize = 11
+    l.TextColor3 = Color3.fromRGB(180, 190, 210)
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = Panel
+    return l
+end
+
+local function makeToggle(y, text, default, cb)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -16, 0, 30)
+    btn.Position = UDim2.fromOffset(8, y)
+    btn.BackgroundColor3 = default and Color3.fromRGB(30, 90, 50) or Color3.fromRGB(40, 48, 64)
+    btn.Text = text .. (default and ": ON" or ": OFF")
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Parent = Panel
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local on = default
+    btn.MouseButton1Click:Connect(function()
+        on = not on
+        btn.Text = text .. (on and ": ON" or ": OFF")
+        btn.BackgroundColor3 = on and Color3.fromRGB(30, 90, 50) or Color3.fromRGB(40, 48, 64)
+        cb(on)
+    end)
+    return btn
+end
+
+local function makeSlider(y, name, minV, maxV, default, decimals, cb)
+    local label = makeLabel(y, name .. ": " .. tostring(default))
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, -16, 0, 18)
+    bg.Position = UDim2.fromOffset(8, y + 18)
+    bg.BackgroundColor3 = Color3.fromRGB(30, 36, 50)
+    bg.BorderSizePixel = 0
+    bg.Parent = Panel
+    Instance.new("UICorner", bg).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(math.clamp((default - minV) / (maxV - minV), 0, 1), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(50, 130, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = bg
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local dragging = false
+    local function setFromX(x)
+        local rel = math.clamp((x - bg.AbsolutePosition.X) / bg.AbsoluteSize.X, 0, 1)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        local val = minV + (maxV - minV) * rel
+        if decimals <= 0 then
+            val = math.floor(val + 0.5)
+        else
+            local m = 10 ^ decimals
+            val = math.floor(val * m + 0.5) / m
+        end
+        label.Text = name .. ": " .. tostring(val)
+        cb(val)
+    end
+
+    bg.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setFromX(input.Position.X)
+        end
+    end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if not dragging then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            setFromX(input.Position.X)
+        end
+    end)
+end
+
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1, -16, 0, 18)
+Status.Position = UDim2.fromOffset(8, 224)
+Status.BackgroundTransparency = 1
+Status.Text = "สถานะ: ปิด"
+Status.Font = Enum.Font.Gotham
+Status.TextSize = 11
+Status.TextColor3 = Color3.fromRGB(140, 150, 170)
+Status.TextXAlignment = Enum.TextXAlignment.Left
+Status.Parent = Panel
+
+makeToggle(38, "Auto Attack", false, function(on)
+    Settings.Enabled = on
+    Status.Text = on and ("สถานะ: เปิด · R" .. Settings.Range .. " D" .. Settings.Damage) or "สถานะ: ปิด"
+    Logo.BackgroundColor3 = on and Color3.fromRGB(20, 60, 40) or Color3.fromRGB(22, 28, 42)
+end)
+
+makeSlider(76, "Range", 50, 1000, Settings.Range, 0, function(v)
+    Settings.Range = v
+    if Settings.Enabled then
+        Status.Text = "สถานะ: เปิด · R" .. Settings.Range .. " D" .. Settings.Damage
+    end
+end)
+
+makeSlider(120, "Damage", 100, 10000, Settings.Damage, 0, function(v)
+    Settings.Damage = v
+    if Settings.Enabled then
+        Status.Text = "สถานะ: เปิด · R" .. Settings.Range .. " D" .. Settings.Damage
+    end
+end)
+
+makeSlider(164, "Delay", 0.03, 0.3, Settings.Delay, 2, function(v)
+    Settings.Delay = v
+end)
+
+-------------------------------------------------
+-- เปิด/ปิด + ลากโลโก้ / ลากแผง
+-------------------------------------------------
+local uiOpen = true
+local function setOpen(v)
+    uiOpen = v
+    Panel.Visible = v
+    Logo.TextTransparency = v and 0 or 0.25
+    logoStroke.Color = v and Color3.fromRGB(60, 140, 255) or Color3.fromRGB(90, 90, 90)
+end
+
+CloseBtn.MouseButton1Click:Connect(function()
+    setOpen(false)
+end)
+
+local function makeDraggable(btn, target)
+    local drag, block = false, false
+    local d0, p0
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            drag, block = true, false
+            d0 = input.Position
+            p0 = target.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    drag = false
+                    task.delay(0.1, function() block = false end)
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if not drag then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            local d = input.Position - d0
+            if d.Magnitude > 6 then block = true end
+            target.Position = UDim2.new(p0.X.Scale, p0.X.Offset + d.X, p0.Y.Scale, p0.Y.Offset + d.Y)
+        end
+    end)
+    return function() return block end
+end
+
+local logoBlocked = makeDraggable(Logo, Logo)
+-- คลิกลอโก้ = เปิด/ปิด (ถ้าไม่ได้ลาก)
+Logo.MouseButton1Click:Connect(function()
+    if logoBlocked() then return end
+    setOpen(not uiOpen)
+end)
+
+-- ลากแผงจาก title
+makeDraggable(Title, Panel)
+
+print("[MultiHit UI] Ready · โลโก้ ATK เปิด/ปิด · ปรับ Range/Damage ได้")
